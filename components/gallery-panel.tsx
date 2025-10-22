@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Sparkles, User, Download, ImageIcon, Video } from "lucide-react"
 import { Card } from "@/components/ui/card"
+import { useToast } from "@/hooks/use-toast"
 
 interface GalleryPanelProps {
   generatedImages: string[]
@@ -64,6 +65,54 @@ export function GalleryPanel({
   uploadedImagePreview,
 }: GalleryPanelProps) {
   const [activeTab, setActiveTab] = useState<"inspiration" | "creation">("inspiration")
+  const [isDownloading, setIsDownloading] = useState(false)
+  const { toast } = useToast()
+
+  const handleDownload = async (url: string) => {
+    if (!url || isDownloading) {
+      return
+    }
+
+    try {
+      setIsDownloading(true)
+
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error("Download failed. Please try again.")
+      }
+
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const filename =
+        (() => {
+          try {
+            const parsedUrl = new URL(url)
+            const lastSegment = parsedUrl.pathname.split("/").filter(Boolean).pop()
+            return lastSegment ?? "nano-banana.jpg"
+          } catch {
+            return "nano-banana.jpg"
+          }
+        })()
+
+      const link = document.createElement("a")
+      link.href = blobUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(blobUrl)
+    } catch (error) {
+      console.error(error)
+      toast({
+        title: "Unable to download",
+        description:
+          error instanceof Error ? error.message : "We couldn't download the image. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDownloading(false)
+    }
+  }
 
   if (isGenerating && activeTab === "inspiration") {
     setActiveTab("creation")
@@ -158,17 +207,20 @@ export function GalleryPanel({
                   </div>
                 ) : (
                   <div className="relative group">
-                    <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden">
-                      <img
-                        src={generatedImages[0] || "/placeholder.svg"}
-                        alt="Generated result"
-                        className="w-full h-full object-cover"
-                      />
-                      {/* Download button overlay */}
-                      <Button
+                  <div className="relative w-full rounded-lg overflow-hidden bg-muted/20 flex items-center justify-center">
+                    <img
+                      src={generatedImages[0] || "/placeholder.svg"}
+                      alt="Generated result"
+                      className="w-full h-auto max-h-[75vh] object-contain"
+                    />
+                    {/* Download button overlay */}
+                    <Button
                         size="icon"
                         variant="secondary"
+                        disabled={isDownloading}
+                        onClick={() => handleDownload(generatedImages[0])}
                         className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Download image"
                       >
                         <Download className="h-4 w-4" />
                       </Button>
